@@ -1,0 +1,60 @@
+<html>
+	<head>
+		<title>TEST</title>
+	</head>
+	<body>
+
+		<script type="text/javascript">
+
+			var ws
+			var username
+			
+			function connect(a){
+				username = a
+				ws = new WebSocket("ws://localhost:3000/ws/"+username)
+				ws.addEventListener("message",function(e){
+					console.log(e.data)
+				})
+			}
+
+			// var iFrequency = 1000; // expressed in miliseconds
+			// var myInterval = 0;
+
+			// STARTS and Resets the loop if any
+			// function startLoop(i) {
+			//     if(myInterval > 0) clearInterval(myInterval);  // stop
+			//     myInterval = setInterval( function doSomething(){
+			// 												    ws.send(JSON.stringify({
+			// 												    	id:i,
+			// 												    	user:'alister'
+			// 												    }));i++;
+			// 												}, iFrequency );  // run
+			// }
+
+			// startLoop(1)
+
+			function send(){
+				var to 	= document.getElementById('to');
+				var msg = document.getElementById('msg');
+				if(to != "" && msg != ""){
+					ws.send(JSON.stringify({
+						to	:to.value,
+						from:username,
+						msg :msg.value
+					}));
+					// to.value  = "";
+					msg.value = "";
+				}
+			}
+			
+
+		</script>
+
+		<input type="text" name="to" id="to" placeholder="to">
+		<input type="text" name="msg" id="msg" placeholder="write message">
+		<button id="send" onclick="send()">SEND</button>
+
+
+
+	</body>
+</html>

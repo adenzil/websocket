@@ -1,0 +1,119 @@
+<html>
+	<head>
+		<title>TEST</title>
+	</head>
+	<body>
+
+		<script type="text/javascript">
+
+			var ws
+			var uid
+
+			function hexToBase64(str) {
+			    return btoa(String.fromCharCode.apply(null, str.replace(/\r|\n/g, "").replace(/([\da-fA-F]{2}) ?/g, "0x$1 ").replace(/ +$/, "").split(" ")));
+			}
+			
+			function connect(a){
+				uid = a
+				ws = new WebSocket("ws://localhost:3000/ws/"+uid)
+				ws.addEventListener("message",function(e){
+
+					var preview = document.querySelector('img'); //selects the query named img
+					var mg = JSON.parse(e.data);
+					console.log(mg)
+					if(mg.image){
+						document.querySelector('img').style.display= "";
+						preview.src = mg.image
+					}
+
+					// var img = new Image();
+					// img.src = e.data;
+					// document.body.appendChild(img);
+				})
+			}
+
+			// var iFrequency = 1000; // expressed in miliseconds
+			// var myInterval = 0;
+
+			// STARTS and Resets the loop if any
+			// function startLoop(i) {
+			//     if(myInterval > 0) clearInterval(myInterval);  // stop
+			//     myInterval = setInterval( function doSomething(){
+			// 												    ws.send(JSON.stringify({
+			// 												    	id:i,
+			// 												    	user:'alister'
+			// 												    }));i++;
+			// 												}, iFrequency );  // run
+			// }
+
+			// startLoop(1)
+
+			function send(){
+				var to 	= document.getElementById('to').value;
+				var msg = document.getElementById('msg').value;
+				var img = document.getElementById('img').value;
+				var reader
+
+				if(to != ""){
+				
+					if(img){
+						var file    = document.querySelector('input[type=file]').files[0]; //sames as here
+	       				reader  = new FileReader();
+	       				reader.readAsDataURL(file);
+	       				reader.onloadend = function () {
+	       					sent(to,uid,msg,reader.result);
+	       				}
+	       				// myVar = setTimeout(function(){console.log(reader.result)}, 100);
+					}
+					else if(msg != ""){
+	       				sent(to,uid,msg);
+					}
+
+					// msg = "";
+					// to  = "";
+
+				}
+			}
+
+			function sent(to,uid,msg,img){
+				ws.send(JSON.stringify({
+						to	:to,
+						from:uid,
+						image :img,
+						msg :msg
+				}));
+				document.getElementById('msg').value = "";
+			}
+
+			function previewFile(){
+		       // var preview = document.querySelector('img'); //selects the query named img
+		       var file    = document.querySelector('input[type=file]').files[0]; //sames as here
+		       var reader  = new FileReader();
+
+		       reader.onloadend = function () {
+		           preview.src = reader.result;
+		       }
+
+		       if (file) {
+		           reader.readAsDataURL(file); //reads the data as a URL
+		           console.log(reader);
+		           console.log(file)
+		       } else {
+		           preview.src = "";
+		       }
+		  	}
+			
+
+		</script>
+
+		<input type="text" name="to" id="to" placeholder="to">
+		<input type="text" name="msg" id="msg" placeholder="write message">
+		<input type="file" id="img"><br>
+		<!-- <input type="file" onchange="previewFile()" id="img"><br> -->
+		<img src="" height="200" alt="Image preview..." style="display:none">
+		<button id="send" onclick="send()">SEND</button>
+
+
+
+	</body>
+</html>
