@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -16,17 +17,21 @@ type Client struct {
 
 	send chan []byte //buffered chan
 
-	name string
+	// name string
+
+	id int
+
+	status bool
 }
 
 type Hub struct {
-	clients map[*Client]bool // registered clients
+	clients map[int]*Client // registered clients
 
 	broadcast chan []byte
 
-	register chan *Client
+	register chan int
 
-	unregister chan *Client
+	unregister chan int
 
 	write chan []byte
 }
@@ -34,9 +39,9 @@ type Hub struct {
 func newHub() *Hub {
 	return &Hub{
 		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		register:   make(chan int),
+		unregister: make(chan int),
+		clients:    make(map[int]*Client),
 		write:      make(chan []byte),
 	}
 }
@@ -44,23 +49,23 @@ func newHub() *Hub {
 func (h *Hub) run() {
 	for {
 		select {
-		case client := <-h.register:
-			h.clients[client] = true
+		case clientid := <-h.register:
+			h.clients[clientid].status = true
 			// fmt.Println("---------ACTIVE--------------")
 			// for client := range h.clients {
-			// 	fmt.Println(client.name)
+			// 	fmt.Println(h.clients[client].id)
 			// }
 			// fmt.Println("-----------------------")
-		case client := <-h.unregister:
+		case clientid := <-h.unregister:
 			// 	fmt.Println("second")
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				client.conn.Close()
+			if _, ok := h.clients[clientid]; ok {
+				delete(h.clients, clientid)
+				// h.clients[client].conn.Close()
 				// close(client.send)
 			}
 			// fmt.Println("---------ACTIVE--------------")
 			// for client := range h.clients {
-			// 	fmt.Println(client.name)
+			// 	fmt.Println(h.clients[client].id)
 			// }
 			// fmt.Println("-----------------------")
 		case message := <-h.broadcast:
@@ -72,27 +77,28 @@ func (h *Hub) run() {
 				// 		close(client.send)
 				// 		delete(h.clients, client)
 				// }
-				client.conn.WriteMessage(1, []byte(message))
+				h.clients[client].conn.WriteMessage(1, []byte(message))
 			}
-		case x := <-h.write:
-			h.Sendmsg(x)
+			// case x := <-h.write:
+			// h.Sendmsg(x)
 
 		}
 	}
 }
 
 type message struct {
-	To   string
-	From string
-	Msg  string
+	To    string
+	From  string
+	Image string
+	Msg   string
 }
 
 func (c *Client) read() {
 
 	defer func() {
-		c.hub.unregister <- c
-		c.hub.broadcast <- []byte(c.name)
-		// c.conn.Close()
+		c.hub.unregister <- c.id
+		c.hub.broadcast <- []byte(strconv.Itoa(c.id))
+		c.conn.Close()
 	}()
 
 	for {
@@ -100,27 +106,47 @@ func (c *Client) read() {
 		if err != nil {
 			return
 		}
-		c.hub.write <- msg
-		// c.conn.WriteMessage(mType, msg)
+
+		var m message
+		er := json.Unmarshal(msg, &m)
+		if er != nil {
+			fmt.Println("error:", er)
+		}
+		to, err := strconv.Atoi(m.To)
+		if err != nil {
+			return
+		}
+
+		fmt.Println(m.Msg)
+		fmt.Println(m.Image)
+
+		c.hub.send(to, msg)
+
+		// c.hub.send(to, []byte(m.Msg))		//only msg
+
+		// c.hub.client[m.To].send <- msg
+
+		// c.hub.write <- msg
+		// c.conn.WriteMessage(1, msg)
 	}
 
 }
 
-func (h *Hub) Sendmsg(a []byte) {
-	var m message
-	er := json.Unmarshal(a, &m)
-	if er != nil {
-		fmt.Println("error:", er)
-	}
-	for client := range h.clients {
-		if client.name == m.To {
-			client.conn.WriteMessage(1, a)
-		}
-	}
+func (h *Hub) send(id int, msg []byte) {
+
+	h.clients[id].conn.WriteMessage(1, msg)
+
+	// for{
+	// 	select{
+	// 		case m := <- c.send:
+	// 		fmt.Println("recieved")
+	// 	}
+	// }
+
 }
 
 func (h *Hub) Base(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "index.html")
+	http.ServeFile(w, r, "demo.html")
 }
 
 func (h *Hub) Socket(w http.ResponseWriter, r *http.Request) {
@@ -129,10 +155,16 @@ func (h *Hub) Socket(w http.ResponseWriter, r *http.Request) {
 	}
 	var conn, _ = upgrader.Upgrade(w, r, nil)
 	params := mux.Vars(r)
-	client := &Client{hub: h, conn: conn, send: make(chan []byte, 256), name: params["user"]}
+	i, err := strconv.Atoi(params["id"])
+	if err != nil {
+		return
+	}
+	client := &Client{hub: h, conn: conn, send: make(chan []byte, 256), id: i, status: true}
+	// fmt.Println(client)
+	h.clients[i] = client
 	go client.read()
-	h.register <- client
-	h.broadcast <- []byte(client.name)
+	h.register <- client.id
+	h.broadcast <- []byte(strconv.Itoa(client.id))
 
 }
 
@@ -142,8 +174,7 @@ func main() {
 	go hub.run()
 	r := mux.NewRouter()
 	r.HandleFunc("/", hub.Base)
-	r.HandleFunc("/ws/{user}", hub.Socket)
+	r.HandleFunc("/ws/{id:[0-9]+}", hub.Socket)
 	http.Handle("/", r)
 	http.ListenAndServe(":3000", nil)
-
 }

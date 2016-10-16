@@ -97,7 +97,7 @@ func (c *Client) read() {
 
 	defer func() {
 		c.hub.unregister <- c.id
-		// c.hub.broadcast <- []byte(c.id)
+		c.hub.broadcast <- []byte(strconv.Itoa(c.id))
 		c.conn.Close()
 	}()
 
@@ -164,7 +164,7 @@ func (h *Hub) Socket(w http.ResponseWriter, r *http.Request) {
 	h.clients[i] = client
 	go client.read()
 	h.register <- client.id
-	// h.broadcast <- []byte(client.id)
+	h.broadcast <- []byte(strconv.Itoa(client.id))
 
 }
 
